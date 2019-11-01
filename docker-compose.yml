@@ -1,0 +1,66 @@
+version: "3.5"
+
+volumes:
+  mongo-data:
+
+services:
+  envoy:
+    image: envoyproxy/envoy:latest
+    command: ["/usr/local/bin/envoy", "-c", "/etc/envoy/envoy.yaml"]
+    volumes:
+      - ${PWD}/envoy/front-envoy.yaml:/etc/envoy/envoy.yaml
+      - ${PWD}/envoy/certs/fullchain.pem:/etc/keys/envoy.crt
+      - ${PWD}/envoy/certs/privkey.pem://etc/keys/envoy.key
+    expose:
+      - "80"
+      - "443"
+    ports:
+      - 80:80
+      - 443:443
+      - 9901:9901
+  snowflake-topup-production:
+    container_name: snowflake-topup-production
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    command: ["make", "start_server"]
+    env_file:
+      - .env.production
+    environment:
+      MONGO_URL: mongodb://mongo/snowflake-topup-production
+      PORT: 8000
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - /opt/node_modules
+      - ./:/opt
+    links:
+      - mongo
+  snowflake-topup-staging:
+    container_name: snowflake-topup-staging
+    build:
+      context: .
+      dockerfile: Dockerfile.staging
+    command: ['make', 'start_server']
+    env_file:
+      - .env.staging
+    environment:
+      MONGO_URL: mongodb://mongo/snowflake-topup-staging
+      PORT: 8080
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - /opt/node_modules
+      - ./:/opt
+    links:
+      - mongo
+  mongo:
+    container_name: mongo
+    image: mongo
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - "27017:27017"
+    restart: always

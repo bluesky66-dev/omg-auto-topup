@@ -1,0 +1,64 @@
+admin:
+  access_log_path: /dev/stdout
+  address:
+    socket_address: { address: 0.0.0.0, port_value: 9901 }
+
+static_resources:
+  listeners:
+    - address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 443
+      filter_chains:
+        - filters:
+            - name: envoy.http_connection_manager
+              config:
+                codec_type: auto
+                stat_prefix: ingress_http
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: staging-service
+                      domains: ["topup-snowflake-staging.projecthydro.org"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: snowflake-topup-staging
+                    - name: production-service
+                      domains: ["topup-snowflake.projecthydro.org"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: snowflake-topup-production
+                http_filters:
+                  - name: envoy.router
+                    config: {}
+          tls_context:
+            common_tls_context:
+              tls_certificates:
+                - certificate_chain:
+                    filename: "/etc/keys/envoy.crt"
+                  private_key:
+                    filename: "/etc/keys/envoy.key"
+              alpn_protocols: [ "h2,http/1.1" ]
+
+  clusters:
+    - name: snowflake-topup-staging
+      connect_timeout: 0.25s
+      type: strict_dns
+      lb_policy: round_robin
+      hosts:
+        - socket_address:
+            address: snowflake-topup-staging
+            port_value: 8080
+
+    - name: snowflake-topup-production
+      connect_timeout: 0.25s
+      type: strict_dns
+      lb_policy: round_robin
+      hosts:
+        - socket_address:
+            address: snowflake-topup-production
+            port_value: 8000
